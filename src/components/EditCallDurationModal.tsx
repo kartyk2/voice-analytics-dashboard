@@ -2,13 +2,12 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { CallDurationPoint } from "../types/charts";
 
-interface Props {
-  initialData?: CallDurationPoint[]; // ✅ optional
+interface EditChartModalProps {
+  initialData?: CallDurationPoint[];
   onSave: (data: CallDurationPoint[]) => void;
   onClose: () => void;
 }
 
-// ✅ fallback default data (never undefined)
 const DEFAULT_DATA: CallDurationPoint[] = [
   { time: "0s", duration: 10 },
   { time: "30s", duration: 25 },
@@ -17,7 +16,11 @@ const DEFAULT_DATA: CallDurationPoint[] = [
   { time: "120s", duration: 15 },
 ];
 
-export function EditCallDurationModal({ initialData, onSave, onClose }: Props) {
+export function EditCallDurationModal({
+  initialData,
+  onSave,
+  onClose,
+}: EditChartModalProps) {
   const [email, setEmail] = useState("");
   const [data, setData] = useState<CallDurationPoint[]>(
     initialData ?? DEFAULT_DATA
@@ -55,7 +58,7 @@ export function EditCallDurationModal({ initialData, onSave, onClose }: Props) {
       },
     });
 
-    localStorage.setItem("email", email); // ✅ remember email
+    localStorage.setItem("email", email);
     onSave(data);
     setLoading(false);
     onClose();
@@ -64,7 +67,9 @@ export function EditCallDurationModal({ initialData, onSave, onClose }: Props) {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div className="bg-[#020617] p-6 rounded-xl w-full max-w-md">
-        <h2 className="text-lg font-semibold mb-4">Edit Call Duration</h2>
+        <h2 className="text-lg font-semibold mb-4">
+          Edit Call Duration
+        </h2>
 
         <input
           type="email"
@@ -74,7 +79,6 @@ export function EditCallDurationModal({ initialData, onSave, onClose }: Props) {
           onChange={(e) => setEmail(e.target.value)}
         />
 
-        {/* ✅ SAFE: data is always an array */}
         {data.map((point, i) => (
           <div key={i} className="flex gap-2 mb-2">
             <input
