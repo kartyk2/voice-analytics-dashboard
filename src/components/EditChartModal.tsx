@@ -4,7 +4,7 @@ const handleSave = async () => {
     .from("user_chart_data")
     .select("*")
     .eq("email", email)
-    .single();
+    .maybeSingle();
 
   if (existing) {
     const confirmOverwrite = window.confirm(
