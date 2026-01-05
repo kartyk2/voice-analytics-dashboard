@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { CallDurationPoint } from "../types/charts";
 
@@ -25,31 +25,65 @@ export function EditCallDurationModal({
   const [data, setData] = useState<CallDurationPoint[]>(
     initialData ?? DEFAULT_DATA
   );
-  const [loading, setLoading] = useState(false);
+  const [existingData, setExistingData] =
+    useState<CallDurationPoint[] | null>(null);
 
+  const [loading, setLoading] = useState(false);
+  const [emailTouched, setEmailTouched] = useState(false);
+
+  // --------------------------------------------------
+  // Load last used email
+  // --------------------------------------------------
+  useEffect(() => {
+    const savedEmail = localStorage.getItem("email");
+    if (savedEmail) {
+      setEmail(savedEmail);
+    }
+  }, []);
+
+  // --------------------------------------------------
+  // Fetch existing data once email is entered
+  // --------------------------------------------------
+  useEffect(() => {
+    if (!email) return;
+
+    const fetchExisting = async () => {
+      const { data: row } = await supabase
+        .from("user_chart_data")
+        .select("chart_values")
+        .eq("email", email)
+        .maybeSingle();
+
+      if (row?.chart_values?.callDuration) {
+        setExistingData(row.chart_values.callDuration);
+        setData(row.chart_values.callDuration); // show previous values
+      } else {
+        setExistingData(null);
+        setData(initialData ?? DEFAULT_DATA); // dummy values
+      }
+    };
+
+    fetchExisting();
+  }, [email, initialData]);
+
+  // --------------------------------------------------
+  // Save handler with overwrite confirmation
+  // --------------------------------------------------
   const handleSave = async () => {
     if (!email) {
-      alert("Email is required");
+      alert("Please enter your email first");
       return;
     }
 
-    setLoading(true);
-
-    const { data: existing } = await supabase
-      .from("user_chart_data")
-      .select("chart_values")
-      .eq("email", email)
-      .maybeSingle();
-
-    if (existing) {
+    // Ask confirmation ONLY if data already exists
+    if (existingData) {
       const ok = window.confirm(
-        "We found previous values for this email. Overwrite them?"
+        "We found previously saved values for this email.\nDo you want to overwrite them?"
       );
-      if (!ok) {
-        setLoading(false);
-        return;
-      }
+      if (!ok) return;
     }
+
+    setLoading(true);
 
     await supabase.from("user_chart_data").upsert({
       email,
@@ -59,7 +93,7 @@ export function EditCallDurationModal({
     });
 
     localStorage.setItem("email", email);
-    onSave(data);
+    onSave(data); // updates chart immediately
     setLoading(false);
     onClose();
   };
@@ -67,22 +101,37 @@ export function EditCallDurationModal({
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div className="bg-[#020617] p-6 rounded-xl w-full max-w-md">
-        <h2 className="text-lg font-semibold mb-4">
+        <h2 className="text-lg font-semibold mb-3">
           Edit Call Duration
         </h2>
 
         <input
           type="email"
           placeholder="your@email.com"
-          className="w-full mb-4 p-2 rounded bg-black/40 border border-white/10"
+          className="w-full mb-2 p-2 rounded bg-black/40 border border-white/10"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            setEmailTouched(true);
+          }}
         />
+
+        {existingData && (
+          <p className="text-xs text-yellow-400 mb-3">
+            Previously saved values loaded for this email
+          </p>
+        )}
+
+        {!existingData && emailTouched && (
+          <p className="text-xs text-blue-400 mb-3">
+            These are default values. Saving will replace them with your custom data.
+          </p>
+        )}
 
         {data.map((point, i) => (
           <div key={i} className="flex gap-2 mb-2">
             <input
-              className="w-1/2 p-2 rounded bg-black/40"
+              className="w-1/2 p-2 rounded bg-black/40 border border-white/10"
               value={point.time}
               onChange={(e) => {
                 const copy = [...data];
@@ -92,7 +141,7 @@ export function EditCallDurationModal({
             />
             <input
               type="number"
-              className="w-1/2 p-2 rounded bg-black/40"
+              className="w-1/2 p-2 rounded bg-black/40 border border-white/10"
               value={point.duration}
               onChange={(e) => {
                 const copy = [...data];
@@ -117,7 +166,7 @@ export function EditCallDurationModal({
           <button
             onClick={handleSave}
             disabled={loading}
-            className="px-4 py-2 rounded bg-purple-600 text-sm font-medium"
+            className="px-4 py-2 rounded bg-purple-600 text-sm font-medium disabled:opacity-60"
           >
             {loading ? "Saving..." : "Save"}
           </button>
