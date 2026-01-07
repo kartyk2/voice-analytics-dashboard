@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { CallDurationPoint } from "../types/charts";
 
@@ -25,15 +25,17 @@ export function EditCallDurationModal({
   const [data, setData] = useState<CallDurationPoint[]>(
     initialData ?? DEFAULT_DATA
   );
-  const [existingData, setExistingData] =
-    useState<CallDurationPoint[] | null>(null);
+  const [existingData, setExistingData] = useState<CallDurationPoint[] | null>(
+    null
+  );
 
   const [loading, setLoading] = useState(false);
   const [emailTouched, setEmailTouched] = useState(false);
 
-  // --------------------------------------------------
+  // tracks whether DB fetch already happened for this email
+  const fetchedForEmail = useRef<string | null>(null);
+
   // Load last used email
-  // --------------------------------------------------
   useEffect(() => {
     const savedEmail = localStorage.getItem("email");
     if (savedEmail) {
@@ -41,41 +43,34 @@ export function EditCallDurationModal({
     }
   }, []);
 
-  // --------------------------------------------------
-  // Fetch existing data once email is entered
-  // --------------------------------------------------
-  useEffect(() => {
-    if (!email) return;
+  // Fetch existing data ONCE per email
+  const fetchExistingForEmail = async () => {
+    if (!email || fetchedForEmail.current === email) return;
 
-    const fetchExisting = async () => {
-      const { data: row } = await supabase
-        .from("user_chart_data")
-        .select("chart_values")
-        .eq("email", email)
-        .maybeSingle();
+    fetchedForEmail.current = email;
 
-      if (row?.chart_values?.callDuration) {
-        setExistingData(row.chart_values.callDuration);
-        setData(row.chart_values.callDuration); // show previous values
-      } else {
-        setExistingData(null);
-        setData(initialData ?? DEFAULT_DATA); // dummy values
-      }
-    };
+    const { data: row } = await supabase
+      .from("user_chart_data")
+      .select("chart_values")
+      .eq("email", email)
+      .maybeSingle();
 
-    fetchExisting();
-  }, [email, initialData]);
+    if (row?.chart_values?.callDuration) {
+      setExistingData(row.chart_values.callDuration);
+      setData(row.chart_values.callDuration);
+    } else {
+      setExistingData(null);
+      setData(initialData ?? DEFAULT_DATA);
+    }
+  };
 
-  // --------------------------------------------------
   // Save handler with overwrite confirmation
-  // --------------------------------------------------
   const handleSave = async () => {
     if (!email) {
       alert("Please enter your email first");
       return;
     }
 
-    // Ask confirmation ONLY if data already exists
     if (existingData) {
       const ok = window.confirm(
         "We found previously saved values for this email.\nDo you want to overwrite them?"
@@ -93,7 +88,7 @@ export function EditCallDurationModal({
     });
 
     localStorage.setItem("email", email);
-    onSave(data); // updates chart immediately
+    onSave(data);
     setLoading(false);
     onClose();
   };
@@ -101,9 +96,7 @@ export function EditCallDurationModal({
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div className="bg-[#020617] p-6 rounded-xl w-full max-w-md">
-        <h2 className="text-lg font-semibold mb-3">
-          Edit Call Duration
-        </h2>
+        <h2 className="text-lg font-semibold mb-3">Edit Call Duration</h2>
 
         <input
           type="email"
@@ -113,7 +106,9 @@ export function EditCallDurationModal({
           onChange={(e) => {
             setEmail(e.target.value);
             setEmailTouched(true);
+            fetchedForEmail.current = null;
           }}
+          onBlur={fetchExistingForEmail}
         />
 
         {existingData && (
@@ -124,7 +119,8 @@ export function EditCallDurationModal({
 
         {!existingData && emailTouched && (
           <p className="text-xs text-blue-400 mb-3">
-            These are default values. Saving will replace them with your custom data.
+            These are default values. Saving will replace them with your custom
+            data.
           </p>
         )}
 
